@@ -1,4 +1,6 @@
-google-api-python-client
-google-auth
-notion-client
-flask
+flask==3.0.3 
+notion-client==2.2.1 
+google-cloud-vision==3.7.4 
+google-auth==2.35.0 
+google-api-python-client==2.149.0 
+requests==2.32.3
