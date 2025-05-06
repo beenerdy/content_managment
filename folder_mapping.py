@@ -97,13 +97,17 @@ def main():
             print(f"  ❌ Missing '0. Planner' for {client_name}")
             continue
 
-        next_post_id = get_subfolder_id(service, planner_id, "0. Next Posts")
+        next_post_id = get_subfolder_id(service, planner_id, "1. Next Posts")
         if not next_post_id:
-            print(f"  ❌ Missing '0. Next Posts' for {client_name}")
+            print(f"  ❌ Missing '1. Next Posts' for {client_name}")
             continue
 
         # Prompt user for Notion client_id
         notion_client_id = input(
+            f"Enter Notion client_id for '{client_name}': "
+        ).strip()
+
+        social_media_managment_id = input(
             f"Enter Notion client_id for '{client_name}': "
         ).strip()
 
@@ -113,7 +117,10 @@ def main():
         client_map[channel_uuid] = {
             "client_name": client_name,
             "google_drive": {"next_post_id": next_post_id},
-            "notion": {"client_id": notion_client_id},
+            "notion": {
+                "client_id": notion_client_id,
+                "social_media_managment_id": social_media_managment_id,
+            },
         }
 
         print(f"  ✅ Added {client_name} with channel UUID {channel_uuid}")
