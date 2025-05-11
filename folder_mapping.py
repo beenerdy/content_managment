@@ -108,7 +108,7 @@ def main():
         ).strip()
 
         social_media_managment_id = input(
-            f"Enter Notion client_id for '{client_name}': "
+            f"Enter Notion social_media_managment_id for '{client_name}': "
         ).strip()
 
         # Generate a UUID for the channel
