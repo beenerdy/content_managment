@@ -64,13 +64,61 @@ def make_drive_file_public(service, file_id):
 
 def parse_file_name(file_name):
     """
-    Extracts the main number and optional letter suffix from file name.
-    Example: '1.jpg' -> ('1', ''), '2a.jpg' -> ('2', 'a')
+    Extracts:
+      - group_key: string before first dash (e.g. '2a')
+      - num: numeric part of group_key (e.g. '2')
+      - letter: letter suffix of group_key, or '' if none (e.g. 'a')
+      - match_key: string after first dash, without extension (e.g. '25.03.30-4-COF08133')
+    Example:
+      '2a-25.03.30-4-COF08133.jpg' -> ('2a', '2', 'a', '25.03.30-4-COF08133')
+      '1-25.03.30-7-COF08256.png'  -> ('1',  '1', '',  '25.03.30-7-COF08256')
     """
-    match = re.match(r"^(\d+)([a-zA-Z]?)\.", file_name)
-    if match:
-        return match.group(1), match.group(2)
-    return None, None
+    m = re.match(r"^([^-]+)-(.+)\.([^.]+)$", file_name)
+    if m:
+        group_key = m.group(1)
+        after_dash = m.group(2)
+        num_letter_match = re.match(r"^(\d+)([a-zA-Z]?)$", group_key)
+        if num_letter_match:
+            num = num_letter_match.group(1)
+            letter = num_letter_match.group(2)
+            match_key = after_dash
+            return group_key, num, letter, match_key
+    return None, None, None, None
+
+
+def move_matching_files(service, fotos_id, scheduling_id, match_key):
+    """
+    Move files from fotos_id to scheduling_id if their base name matches match_key.
+    """
+    try:
+        # List all files in fotos_id
+        fotos_files = (
+            service.files()
+            .list(
+                q=f"'{fotos_id}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+                fields="files(id, name, parents)",
+            )
+            .execute()
+        ).get("files", [])
+
+        # Find matches (base name == match_key)
+        found = False
+        for file in fotos_files:
+            base_name, _ = os.path.splitext(file["name"])
+            if base_name == match_key:
+                # Move file by updating its parent folder
+                service.files().update(
+                    fileId=file["id"],
+                    addParents=scheduling_id,
+                    removeParents=fotos_id,
+                    fields="id, parents",
+                ).execute()
+                print(f"Moved file '{file['name']}' from fotos_id to scheduling_id.")
+                found = True
+        if not found:
+            print(f"File with base name '{match_key}' not found in fotos_id.")
+    except Exception as e:
+        print(f"ERROR moving file with base name '{match_key}': {e}", file=sys.stderr)
 
 
 def get_cycle_id_from_social_media_management(social_media_management_id):
@@ -215,6 +263,8 @@ def drive_webhook(request):
         social_media_managment_id = client_info["notion"]["social_media_managment_id"]
         client_name = client_info["client_name"]
         folder_id = client_info["google_drive"]["next_post_id"]
+        fotos_id = client_info["google_drive"]["fotos_id"]
+        scheduling_id = client_info["google_drive"]["scheduling_id"]
 
         # Only process if this is an 'add' or 'change' event
         if resource_state not in ["add", "change"]:
@@ -254,13 +304,16 @@ def drive_webhook(request):
         file_lookup = {}
         for file in files:
             file_name = file["name"]
-            num, letter = parse_file_name(file_name)
+            group_key, num, letter, match_key = parse_file_name(file_name)
             if num is None:
                 print(
                     f"WARNING: File '{file_name}' does not match expected pattern, skipping.",
                     file=sys.stderr,
                 )
                 continue
+
+            # Move matching files from fotos_id to scheduling_id
+            move_matching_files(service, fotos_id, scheduling_id, match_key)
             groups[num].append((letter, file))
             file_lookup[file_name] = file
 
