@@ -43,6 +43,19 @@ class GoogleDriveDAL:
                 found = True
         return found
 
+    def list_files_in_folder(
+        self, folder_id: str, fields: str = "files(id, name, mimeType)"
+    ):
+        """Return a list of files in the given folder ID."""
+        return (
+            self.service.files()
+            .list(
+                q=f"'{folder_id}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+                fields=fields,
+            )
+            .execute()
+        ).get("files", [])
+
     def get_subfolder_id(self, parent_id: str, folder_name: str) -> Optional[str]:
         query = (
             f"'{parent_id}' in parents and "

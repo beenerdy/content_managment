@@ -15,11 +15,14 @@ class Client:
     tag: str
     client_name: str
     notion_page_id: str
+    notion_url: str
     google_drive: Dict[str, ResourceEntry] = field(default_factory=dict)
     notion: Dict[str, ResourceEntry] = field(default_factory=dict)
 
     @classmethod
-    def from_notion(cls, notion_dal, page_id: str, uuid: str = None):
+    def from_notion(
+        cls, notion_dal, page_id: str, uuid: str = None, notion_url: str = ""
+    ):
         """
         Create a Client from Notion page properties.
         """
@@ -35,7 +38,13 @@ class Client:
         client_name = get_text(properties.get("Project name", {}))
         tag = get_text(properties.get("Tags", {}))
 
-        return cls(uuid=uuid, tag=tag, client_name=client_name, notion_page_id=page_id)
+        return cls(
+            uuid=uuid,
+            tag=tag,
+            client_name=client_name,
+            notion_page_id=page_id,
+            notion_url=notion_url,
+        )
 
     def add_resource(self, service: str, key: str, id: str, description: str, url: str):
         entry = ResourceEntry(id=id, description=description, url=url)
@@ -53,11 +62,35 @@ class Client:
             return self.notion.get(key)
         return None
 
+    def get_google_drive_id(self, key: str) -> Optional[str]:
+        entry = self.google_drive.get(key)
+        return entry.id if entry else None
+
+    def get_google_drive_url(self, key: str) -> Optional[str]:
+        entry = self.google_drive.get(key)
+        return entry.url if entry else None
+
+    def get_notion_id(self, key: str) -> Optional[str]:
+        entry = self.notion.get(key)
+        return entry.id if entry else None
+
+    def get_notion_url(self, key: str) -> Optional[str]:
+        entry = self.notion.get(key)
+        return entry.url if entry else None
+
+    def get_resource_field(
+        self, service: str, key: str, field: str = "id"
+    ) -> Optional[str]:
+        group = getattr(self, service, {})
+        entry = group.get(key)
+        return getattr(entry, field) if entry else None
+
     def to_dict(self) -> dict:
         return {
             "tag": self.tag,
             "client_name": self.client_name,
             "notion_page_id": self.notion_page_id,
+            "notion_url": self.notion_url,
             "google_drive": {k: asdict(v) for k, v in self.google_drive.items()},
             "notion": {k: asdict(v) for k, v in self.notion.items()},
         }
@@ -70,7 +103,8 @@ class Client:
             uuid=uuid,
             tag=data.get("tag", ""),
             client_name=data.get("client_name", ""),
-            notion_page_id=data.get("notion_page_id", uuid),  # <-- Default to uuid
+            notion_page_id=data.get("notion_page_id", uuid),
+            notion_url=data.get("notion_url", ""),
             google_drive=gd,
             notion=nt,
         )
