@@ -21,6 +21,7 @@ class ClientManager:
             raise ValueError("Missing 'notion_url'")
 
         page_id = self.notion_dal.extract_notion_id(notion_url)
+        print(notion_url, page_id)
         client = Client.from_notion(
             self.notion_dal, page_id, uuid=page_id, notion_url=notion_url
         )
@@ -121,7 +122,8 @@ class ClientManager:
                     f"WARNING: File '{file_name}' does not match expected pattern, skipping."
                 )
                 continue
-            drive.move_matching_files(match_key)
+            if match_key:  # Only move if match_key is not empty
+                drive.move_matching_files(match_key)
             groups[num].append((letter, file))
 
         sorted_group_keys = sorted(groups.keys(), key=lambda x: int(x))

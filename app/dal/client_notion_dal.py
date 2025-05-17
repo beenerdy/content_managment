@@ -43,7 +43,7 @@ class ClientNotionDAL:
 
     def add_content_grouped(self, file_name, file_id, body_images):
         smm_id = self.client.get_notion_id("social_media_managment_id")
-        client_notion_id = self.client.get_notion_id("client_id")
+        client_notion_id = self.client.get_notion_id("notion_page_id")
         cycle_id = self.get_cycle_id_from_social_media_management()
         file_base_name = os.path.splitext(file_name)[0]
         identifier = f"{cycle_id} {file_base_name}" if cycle_id else file_base_name

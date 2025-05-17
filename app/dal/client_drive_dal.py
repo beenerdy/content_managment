@@ -72,16 +72,20 @@ class ClientDriveDAL:
 
     @staticmethod
     def parse_file_name(file_name):
-        m = re.match(r"^([^-]+)-(.+)\.([^.]+)$", file_name)
+        # Matches: prefix (digits + optional letter), dash, optional middle, base name, extension
+        # Examples:
+        # 1-25.03.30-7-COF08256.jpg => 1, 1, '', 25.03.30-7-COF08256
+        # 2b-COF08256.jpg           => 2b, 2, 'b', COF08256
+        # 3-MyFile.jpeg             => 3, 3, '', MyFile
+        # 4-.jpg                    => 4, 4, '', ''
+        m = re.match(r"^(\d+[a-zA-Z]?)-(.*)\.([^.]+)$", file_name)
         if m:
             group_key = m.group(1)
-            after_dash = m.group(2)
             num_letter_match = re.match(r"^(\d+)([a-zA-Z]?)$", group_key)
-            if num_letter_match:
-                num = num_letter_match.group(1)
-                letter = num_letter_match.group(2)
-                match_key = after_dash
-                return group_key, num, letter, match_key
+            num = num_letter_match.group(1)
+            letter = num_letter_match.group(2)
+            match_key = m.group(2)  # Can be empty string
+            return group_key, num, letter, match_key
         return None, None, None, None
 
     def move_matching_files(self, match_key):

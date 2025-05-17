@@ -71,6 +71,10 @@ class Client:
         return entry.url if entry else None
 
     def get_notion_id(self, key: str) -> Optional[str]:
+        # If requesting the main Notion page ID
+        if key in ("notion_page_id", "main", "page", "root", None):
+            return self.notion_page_id
+        # Otherwise look in the notion resources
         entry = self.notion.get(key)
         return entry.id if entry else None
 
