@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 
 from dal.client_drive_dal import ClientDriveDAL
@@ -9,11 +10,91 @@ from models.client_map import ClientMap
 
 
 class ClientManager:
-    def __init__(self, client_map, drive_dal, notion_dal, notion_db_id):
+    def __init__(
+        self,
+        client_map,
+        drive_dal,
+        notion_dal,
+        notion_db_id,
+        vision_service,
+        gemini_service,
+    ):
         self.client_map = client_map
         self.drive_dal = drive_dal
         self.notion_dal = notion_dal
         self.notion_db_id = notion_db_id
+        self.vision_service = vision_service
+        self.gemini_service = gemini_service
+
+    def generate_captions_for_client(self, client_uuid):
+        """
+        Generates captions for all Notion pages with 'Suggest Caption' status for the given client.
+        """
+        client = self.client_map.get_client(client_uuid)
+        if not client:
+            raise ValueError(f"Client UUID {client_uuid} not found.")
+        notion = ClientNotionDAL(
+            client,
+            self.notion_dal,
+            self.notion_db_id,
+            self.drive_dal,
+            self.vision_service,
+            self.gemini_service,
+        )
+        notion.generate_captions_for_suggested()
+
+    def get_captions_for_client(self, client_uuid):
+        client = self.client_map.get_client(client_uuid)
+        if not client:
+            return None, f"Client UUID '{client_uuid}' not found."
+
+        client_notion_id = client.get_notion_id("notion_page_id")
+        if not client_notion_id:
+            return None, f"Client Notion page ID not found for '{client_uuid}'."
+        # Use the dashed version, as shown in your Notion data
+        client_notion_id = client_notion_id.lower()
+
+        filter_payload = {
+            "and": [
+                {"property": "Status", "status": {"equals": "Caption Generated"}},
+                {"property": "Client", "relation": {"contains": client_notion_id}},
+            ]
+        }
+        results = self.notion_dal.query_database(self.notion_db_id, filter_payload)
+        items = results.get("results", [])
+
+        posts = []
+        for page in items:
+            props = page.get("properties", {})
+            identifier_prop = props.get("Identifier", {})
+            identifier_text = ""
+            if identifier_prop.get("type") == "title":
+                title_objs = identifier_prop.get("title", [])
+                if title_objs:
+                    identifier_text = title_objs[0].get("plain_text", "")
+            match = re.match(r"(\d+)[-–]", identifier_text.strip())
+            if not match:
+                continue
+            number = int(match.group(1))
+
+            # Extract the caption text
+            caption_prop = props.get("Caption", {})
+            caption_text = ""
+            if caption_prop.get("type") == "rich_text":
+                rich_texts = caption_prop.get("rich_text", [])
+                if rich_texts:
+                    caption_text = rich_texts[0].get("plain_text", "")
+            if caption_text:
+                posts.append((number, caption_text.strip()))
+
+        if not posts:
+            return "", "No posts found for this client."
+
+        # Sort by number descending
+        posts.sort(key=lambda x: x[0], reverse=True)
+        message_lines = [f"- ({num}): {caption}" for num, caption in posts]
+        message = "\n".join(message_lines)
+        return message, None
 
     def create_client_from_payload(self, payload):
         notion_url = payload.get("notion_url")

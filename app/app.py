@@ -6,6 +6,8 @@ from dal.todoist_dal import TodoistDAL
 from flask import Flask
 from managers.client_manager import ClientManager
 from models.client_map import ClientMap
+from services.gemini_service import GeminiService
+from services.vision_service import VisionService
 
 
 def create_app():
@@ -15,6 +17,7 @@ def create_app():
     app.config["CLIENT_MAP_PATH"] = os.environ.get("CLIENT_MAP_PATH", "client_map.json")
     app.config["NOTION_TOKEN"] = os.environ.get("NOTION_TOKEN")
     app.config["TODOIST_TOKEN"] = os.environ.get("TODOIST_TOKEN")
+    app.config["GEMINI_API_KEY"] = os.environ["GEMINI_API_KEY"]
     app.config["SERVICE_ACCOUNT_FILE"] = os.environ.get(
         "SERVICE_ACCOUNT_FILE", "service-account.json"
     )
@@ -28,8 +31,16 @@ def create_app():
     drive_dal = GoogleDriveDAL(app.config["SERVICE_ACCOUNT_FILE"])
     notion_dal = NotionDAL(app.config["NOTION_TOKEN"])
     todoist_dal = TodoistDAL(app.config["TODOIST_TOKEN"])
+    vision_service = VisionService(app.config["SERVICE_ACCOUNT_FILE"])
+    gemini_service = GeminiService(app.config["GEMINI_API_KEY"])
+
     client_manager = ClientManager(
-        client_map, drive_dal, notion_dal, app.config["CONTENT_DB_NOTION_ID"]
+        client_map,
+        drive_dal,
+        notion_dal,
+        app.config["CONTENT_DB_NOTION_ID"],
+        vision_service,
+        gemini_service,
     )
 
     # Attach to app for access in routes

@@ -18,6 +18,18 @@ class GoogleDriveDAL:
             service_account_file
         )
 
+    def download_file(self, file_id: str) -> bytes:
+        """
+        Download a file's content from Google Drive using the file_id.
+        Returns the file's binary content.
+        """
+        try:
+            request = self.service.files().get_media(fileId=file_id)
+            return request.execute()
+        except Exception as e:
+            print(f"Failed to download file {file_id} from Google Drive: {e}")
+            return None
+
     @staticmethod
     def extract_folder_id(url: str) -> str:
         match = re.search(r"/folders/([a-zA-Z0-9_-]+)", url)

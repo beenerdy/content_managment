@@ -31,8 +31,31 @@ class NotionDAL:
             properties=properties,
         )
 
+    def update_page(self, page_id, properties):
+        """
+        Update properties of a Notion page.
+        :param page_id: The Notion page ID.
+        :param properties: Dict of properties to update.
+        :return: The API response (dict) with the updated page.
+        """
+        return self.notion.pages.update(
+            page_id=page_id,
+            properties=properties,
+        )
+
     def append_blocks(self, page_id, children):
         return self.notion.blocks.children.append(
             block_id=page_id,
             children=children,
+        )
+
+    def query_database(self, database_id, filter_payload):
+        """
+        Query a Notion database using a filter.
+        :param database_id: The Notion database ID.
+        :param filter_payload: A dict representing the Notion filter.
+        :return: The API response (dict) containing the results.
+        """
+        return self.notion.databases.query(
+            database_id=database_id, filter=filter_payload
         )

@@ -23,8 +23,6 @@ NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SERVICE_ACCOUNT_FILE = "service-account.json"
 
-NOTION_DB_ID = "1e8add08074880faa661d372bdb63bce"  # Your Notion database ID
-
 # Initialize Notion client
 if not NOTION_TOKEN:
     logging.error("NOTION_TOKEN environment variable not set.")

@@ -34,9 +34,25 @@ def register_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 400
 
-    @app.route("/client_map", methods=["GET"])
-    def get_client_map():
-        return jsonify(app.client_map.to_dict())
+    @app.route("/client/<client_uuid>/captions", methods=["GET"])
+    def get_captions(client_uuid):
+        message, error = app.client_manager.get_captions_for_client(client_uuid)
+        if error:
+            # Return error as plain text with 404
+            return error, 404, {"Content-Type": "text/plain; charset=utf-8"}
+        return message, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+    @app.route("/client/<client_uuid>/generate-captions", methods=["POST"])
+    def generate_captions(client_uuid):
+        try:
+            app.client_manager.generate_captions_for_client(client_uuid)
+            return jsonify({"message": "Caption generation completed"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+        @app.route("/client_map", methods=["GET"])
+        def get_client_map():
+            return jsonify(app.client_map.to_dict())
 
     @app.route("/client", methods=["POST"])
     def create_client_from_notion():
