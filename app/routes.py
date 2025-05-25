@@ -1,7 +1,15 @@
-from flask import jsonify, request
+import urllib3
+from flask import jsonify, request, send_from_directory
+from flask_cors import CORS
+
+from dal.google_drive_dal import GoogleDriveDAL
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def register_routes(app):
+    CORS(app, origins=["http://localhost:3000"])
+
     @app.route("/client/<client_uuid>/add_id", methods=["POST"])
     def add_id(client_uuid):
         data = request.json
@@ -42,6 +50,21 @@ def register_routes(app):
             return error, 404, {"Content-Type": "text/plain; charset=utf-8"}
         return message, 200, {"Content-Type": "text/plain; charset=utf-8"}
 
+    @app.route("/client/<client_uuid>/images", methods=["GET"])
+    def get_client_images(client_uuid):
+        try:
+            images = app.client_manager.get_images_for_client(client_uuid)
+            return jsonify(images)
+        except FileNotFoundError as e:
+            return jsonify({"error": str(e)}), 404
+        except Exception as e:
+            print(f"Error in get_client_images: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/images/<filename>")
+    def serve_image(filename):
+        return send_from_directory(GoogleDriveDAL.IMAGES_DIR, filename)
+
     @app.route("/client/<client_uuid>/generate-captions", methods=["POST"])
     def generate_captions(client_uuid):
         try:
@@ -50,9 +73,141 @@ def register_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-        @app.route("/client_map", methods=["GET"])
-        def get_client_map():
-            return jsonify(app.client_map.to_dict())
+    @app.route("/client_map", methods=["GET"])
+    def get_client_map():
+        return jsonify(app.client_map.to_dict())
+
+    @app.route("/export", methods=["POST"])
+    def export_images():
+        try:
+            data = request.json
+            client_id = data.get("clientId")
+            items = data.get("items", [])
+
+            # Validate input
+            if not client_id:
+                return (
+                    jsonify({"success": False, "message": "Client ID is required"}),
+                    400,
+                )
+
+            client = app.client_map.get_client(client_id)
+            if not client:
+                return (
+                    jsonify(
+                        {"success": False, "message": f"Client not found: {client_id}"}
+                    ),
+                    404,
+                )
+
+            # Get the client's next_post_id folder
+            next_post_id = client.get_google_drive_id("next_post_id")
+            if not next_post_id:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": f"next_post_id not configured for client {client.client_name}",
+                        }
+                    ),
+                    400,
+                )
+
+            # Track results
+            processed_count = 0
+            errors = []
+
+            # Process each item
+            for item in items:
+                position = item.get("position")
+                is_carousel = item.get("isCarousel", False)
+                images = item.get("images", [])
+
+                for image in images:
+                    try:
+                        original_id = image.get("originalId", "")
+                        export_prefix = (
+                            image.get("exportFilename", "")
+                            .replace(".jpg", "")
+                            .replace(".jpeg", "")
+                            .replace(".png", "")
+                        )
+                        original_filename = image.get("originalFilename", "")
+
+                        if (
+                            not original_id
+                            or not export_prefix
+                            or not original_filename
+                        ):
+                            errors.append(
+                                f"Missing data for item at position {position}"
+                            )
+                            continue
+
+                        # Format the new filename with the prefix
+                        new_filename = f"{export_prefix}-{original_filename}"
+
+                        # Create file metadata for the copy
+                        file_metadata = {
+                            "name": new_filename,
+                            "parents": [next_post_id],
+                        }
+
+                        # Copy the file to the next_post_id folder with the new name
+                        copied_file = (
+                            app.drive_dal.service.files()
+                            .copy(
+                                fileId=original_id,
+                                body=file_metadata,
+                                fields="id, name",
+                            )
+                            .execute()
+                        )
+
+                        if copied_file and copied_file.get("id"):
+                            processed_count += 1
+                            app.logger.info(
+                                f"Exported {new_filename} to {client.client_name}'s next_post_id folder"
+                            )
+                        else:
+                            errors.append(f"Failed to copy file for {new_filename}")
+
+                    except HttpError as e:
+                        error_msg = (
+                            f"Google API error for position {position}: {str(e)}"
+                        )
+                        app.logger.error(error_msg)
+                        errors.append(error_msg)
+                    except Exception as e:
+                        error_msg = (
+                            f"Error processing image at position {position}: {str(e)}"
+                        )
+                        app.logger.error(error_msg)
+                        errors.append(error_msg)
+
+            # Generate response
+            if errors:
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": f"Exported {processed_count} images with {len(errors)} errors",
+                        "errors": errors,
+                    }
+                )
+            else:
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": f"Successfully exported {processed_count} images to {client.client_name}'s next posts folder",
+                    }
+                )
+
+        except Exception as e:
+            app.logger.error(f"Export error: {str(e)}")
+            return (
+                jsonify({"success": False, "message": f"Export failed: {str(e)}"}),
+                500,
+            )
 
     @app.route("/client", methods=["POST"])
     def create_client_from_notion():

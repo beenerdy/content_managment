@@ -1,11 +1,66 @@
 import os
 import re
+import time
 
 
 class ClientDriveDAL:
     def __init__(self, client, drive_dal):
         self.client = client
         self.drive_dal = drive_dal
+
+    def get_ready_images(self):
+        """
+        Fetches all images from the client's fotos_id folder and
+        returns a list of image metadata dicts with direct Google Drive URLs
+        and a localUrl for Flask static serving.
+        Downloads images locally for frontend consumption.
+        Only returns after all images are downloaded or skipped if failed.
+        Images are grouped if in subfolders with a group name.
+        """
+        fotos_id = self.client.get_google_drive_id("fotos_id")
+        if not fotos_id:
+            print("Fotos folder ID not found.")
+            raise ValueError("Fotos folder ID not found for this client.")
+
+        print(f"Listing images in folder ID: {fotos_id}")
+        files = self.drive_dal.list_images_with_grouping(fotos_id)
+        print(f"Found {len(files)} images.")
+
+        images = []
+        for file in files:
+            if not file.get("mimeType", "").startswith("image/"):
+                print(
+                    f"Skipping non-image file: {file.get('name', 'N/A')} ({file.get('mimeType', 'N/A')})"
+                )
+                continue  # Skip if it's not an image
+
+            # Download the image locally (synchronously)
+            local_filename = self.drive_dal.download_file(file["id"], file["name"])
+            if not local_filename:
+                print(f"Skipping {file['name']} as download failed.")
+                continue  # Skip if download failed
+
+            # Construct the local URL for frontend
+            local_url = f"/images/{local_filename}"
+
+            images.append(
+                {
+                    "id": file["id"],
+                    "name": file["name"],
+                    "group": file.get("group"),
+                    "url": f"https://lh3.googleusercontent.com/d/{file['id']}",
+                    "driveUrl": f"https://lh3.googleusercontent.com/d/{file['id']}",
+                    "alternativeUrl": f"https://drive.google.com/uc?export=view&id={file['id']}",
+                    "thumbnailUrl": file.get("thumbnailLink"),
+                    "mimeType": file.get("mimeType"),
+                    "localUrl": local_url,  # <-- Added for frontend consumption
+                }
+            )
+        print(f"Prepared {len(images)} image entries with Drive and local URLs.")
+        images.sort(key=lambda x: (x["group"] or "", x["name"]))
+
+        # Only returns after all downloads are done (which is already the case)
+        return images
 
     def count_ready_files(self, content_type):
         """

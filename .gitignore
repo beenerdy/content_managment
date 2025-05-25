@@ -2,5 +2,6 @@ service-account.json
 client_next_post_map.json
 client_map.json
 channel_map.json
+app/temp_images
 __pycache__/
 *.pyc

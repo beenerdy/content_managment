@@ -26,6 +26,13 @@ class ClientManager:
         self.vision_service = vision_service
         self.gemini_service = gemini_service
 
+    def get_images_for_client(self, client_uuid):
+        client = self.client_map.get_client(client_uuid)
+        if not client:
+            raise ValueError(f"Client UUID {client_uuid} not found.")
+        client_drive_dal = ClientDriveDAL(client, self.drive_dal)
+        return client_drive_dal.get_ready_images()
+
     def generate_captions_for_client(self, client_uuid):
         """
         Generates captions for all Notion pages with 'Suggest Caption' status for the given client.
@@ -60,7 +67,9 @@ class ClientManager:
                 {"property": "Client", "relation": {"contains": client_notion_id}},
             ]
         }
-        results = self.notion_dal.query_database(self.notion_db_id, filter_payload)
+        results = self.notion_dal.query_database(
+            "1e8add08074880faa661d372bdb63bce", filter_payload
+        )
         items = results.get("results", [])
 
         posts = []
@@ -136,7 +145,14 @@ class ClientManager:
             smm_id = client.get_notion_id("social_media_managment_id")
             if not smm_id:
                 continue
-            notion = ClientNotionDAL(client, self.notion_dal, self.notion_db_id)
+            notion = ClientNotionDAL(
+                client,
+                self.notion_dal,
+                self.notion_db_id,
+                self.drive_dal,
+                self.vision_service,
+                self.gemini_service,
+            )
             cycle_start_str, targets = notion.get_cycle_start_and_targets(smm_id)
             if not cycle_start_str:
                 print(f"Cycle Start Date not set for client {client.client_name}")
@@ -185,7 +201,14 @@ class ClientManager:
         client = self.client_map.get_client(channel_id)
 
         drive = ClientDriveDAL(client, self.drive_dal)
-        notion = ClientNotionDAL(client, self.notion_dal, self.notion_db_id)
+        notion = ClientNotionDAL(
+            client,
+            self.notion_dal,
+            self.notion_db_id,
+            self.drive_dal,
+            self.vision_service,
+            self.gemini_service,
+        )
 
         files = drive.list_next_posts()
         if not files:
